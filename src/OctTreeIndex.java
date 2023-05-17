@@ -1,14 +1,13 @@
-import java.io.BufferedReader;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Hashtable;
 import java.util.Properties;
 import java.util.Date;
 
-class Cube {
+class Cube implements Serializable {
     // Hashtable<String, Object> mins, maxs; // <column, minValue>
     Object minC1, minC2, minC3, maxC1, maxC2, maxC3;
     Object midC1, midC2, midC3;
@@ -121,15 +120,29 @@ class Cube {
 
     public Object getMid(Object min, Object max) {
         if (min instanceof Integer) {
+            System.out.println("min in getMid: " + min);
+            System.out.println("max in getMid: " + max);
+            System.out.println("mid in getMid: " + ((Integer) max + (Integer) min) / 2);
             return ((Integer) max + (Integer) min) / 2;
         } else if (min instanceof Double) {
+            System.out.println("min in getMid: " + min);
+            System.out.println("max in getMid: " + max);
+            System.out.println("mid in getMid: " + ((Double) max + (Double) min) / 2.0);
             return ((Double) max + (Double) min) / 2.0;
         } else if (min instanceof String) {
+            System.out.println("min in getMid: " + min);
+            System.out.println("max in getMid: " + max);
+            System.out.println("mid in getMid: " + findStringMedian((String) min, (String) max,
+                    Math.max(((String) max).length(), ((String) min).length())));
+
             return findStringMedian((String) min, (String) max,
                     Math.max(((String) max).length(), ((String) min).length()));
 
         } else if (min instanceof Date) {
+            System.out.println("min in getMid: " + min);
+            System.out.println("max in getMid: " + max);
             long midMillis = (((Date) min).getTime() + ((Date) max).getTime()) / 2;
+            System.out.println("mid in getMid: " + new Date(midMillis));
             return new Date(midMillis);
         }
         return null;
@@ -193,7 +206,7 @@ class Cube {
     }
 }
 
-class OctTree {
+class OctTree implements Serializable {
     int maxEntries;
     OctTree[] children;
     Cube bounds;
@@ -328,49 +341,53 @@ class OctTree {
     }
 
     // DELETE
-    public void deleteTupleReference(Cube range) {
+    public void deleteTupleReference(Cube point) throws DBAppException {
+        // NOTE THAT: the Cube param will always be passed in as just point in 1-D
+        // so it will only be one tuple reference to delete
+
+        if (!point.intersects(bounds))
+            return;
 
         if (isDivided) {
-            children[0].deleteTupleReference(range);
-            children[1].deleteTupleReference(range);
-            children[2].deleteTupleReference(range);
-            children[3].deleteTupleReference(range);
-            children[4].deleteTupleReference(range);
-            children[5].deleteTupleReference(range);
-            children[6].deleteTupleReference(range);
-            children[7].deleteTupleReference(range);
+            children[0].deleteTupleReference(point);
+            children[1].deleteTupleReference(point);
+            children[2].deleteTupleReference(point);
+            children[3].deleteTupleReference(point);
+            children[4].deleteTupleReference(point);
+            children[5].deleteTupleReference(point);
+            children[6].deleteTupleReference(point);
+            children[7].deleteTupleReference(point);
         }
 
-        ArrayList<TupleReference> toBeDeleted = new ArrayList<TupleReference>();
+        TupleReference toBeDeleted = null;
 
         for (TupleReference tupleRef : entries) {
-            if (range.boundsReference(tupleRef))
-                toBeDeleted.add(tupleRef);
+            if (point.boundsReference(tupleRef))
+                toBeDeleted = tupleRef;
         }
 
-        entries.removeAll(toBeDeleted);
+        entries.remove(toBeDeleted);
 
-        int count = countReferences();
-
-        if (count <= maxEntries)
+        if (countReferences() <= maxEntries)
             mergeChildrenWithParent();
 
     }
 
-    public void mergeChildrenWithParent() {
-        ArrayList<TupleReference> refs = findTupleReference(bounds, null);
+    public void mergeChildrenWithParent() throws DBAppException {
+        ArrayList<TupleReference> allReferences = findTupleReference(bounds, null);
 
         deleteReferenceNoMerge(bounds);
 
-        isDivided = false;
-
         children = new OctTree[8];
 
-        entries.addAll(refs);
+        isDivided = false;
+
+        for (TupleReference tupleRef : allReferences)
+            insertTupleReference(tupleRef);
 
     }
 
-    public void deleteReferenceNoMerge(Cube range) {
+    public void deleteReferenceNoMerge(Cube range) throws DBAppException {
 
         if (isDivided) {
             children[0].deleteTupleReference(range);
@@ -487,7 +504,7 @@ class OctTree {
         ot.insertTupleReference(new TupleReference(t1, "pageRefExample"));
         ot.insertTupleReference(new TupleReference(t2, "pageRefExample"));
         ot.insertTupleReference(new TupleReference(t3, "pageRefExample"));
-        ot.insertTupleReference(new TupleReference(t4, "pageRefExample"));
+        // ot.insertTupleReference(new TupleReference(t4, "pageRefExample"));
         // ot.insertTupleReference(new TupleReference(t5, "pageRefExample"));
         // ot.insertTupleReference(new TupleReference(t6, "pageRefExample"));
 
@@ -499,30 +516,35 @@ class OctTree {
 
         Cube range4 = new Cube(70, 70, 40, 40, 80, 80);
 
+        System.out.println();
         displayOctTree(ot, 0);
+        System.out.println();
 
         // select
-        ArrayList<TupleReference> result = ot.findTupleReference(range1, null);
-        System.out.println("\nfound tuples:");
-        for (TupleReference tupleRef : result) {
-            System.out.println(tupleRef);
-        }
-        System.out.println("count: " + ot.countReferences());
+        // ArrayList<TupleReference> result = ot.findTupleReference(range1, null);
+        // System.out.println("\nfound tuples:");
+        // for (TupleReference tupleRef : result) {
+        // System.out.println(tupleRef);
+        // }
+        // System.out.println("count: " + ot.countReferences());
 
-        // delete
+        // deleteTupleReference
         // ot.deleteTupleReference(range3);
         // displayOctTree(ot, 0);
+        ot.deleteTupleReference(range3);
+        displayOctTree(ot, 0);
+        System.out.println();
 
         // update
-        Object[] newVals = { 85, 50, 120 };
-        ot.updateTupleReference(range4, newVals);
-        displayOctTree(ot, 0);
+        // Object[] newVals = { 85, 50, 120 };
+        // ot.updateTupleReference(range4, newVals);
+        // displayOctTree(ot, 0);
 
         System.out.println("count: " + ot.countReferences());
     }
 }
 
-public class OctTreeIndex {
+public class OctTreeIndex implements Serializable {
     String indexName;
     String tableName;
     String[] columnsNames;
@@ -538,50 +560,19 @@ public class OctTreeIndex {
 
     }
 
-    public OctTreeIndex(String tableName, String indexName, String[] columnsNames) throws IOException {
+    public OctTreeIndex(String tableName, String indexName, String[] columnsNames, Cube bounds) throws IOException {
+        this.tableName = tableName;
+        this.indexName = indexName;
+        this.columnsNames = columnsNames;
+
         Properties prop = new Properties();
         FileInputStream fis = new FileInputStream("resources/DBApp.config");
         prop.load(fis);
         this.maxEntriesPerOctant = Integer.parseInt(prop.getProperty("MaximumEntriesinOctreeNode"));
 
-        ArrayList<String[]> tableData = csvReader("metadata.csv", tableName);
-        Hashtable<String, Object> mins = new Hashtable<String, Object>();
-        Hashtable<String, Object> maxs = new Hashtable<String, Object>();
-
-        for (int i = 0; i < tableData.size(); i++) {
-            for (int j = 0; j < columnsNames.length; j++) {
-                if (tableData.get(i)[1].equals(columnsNames[j])) {
-                    mins.put(columnsNames[j], tableData.get(i)[6]);
-                    maxs.put(columnsNames[j], tableData.get(i)[7]);
-
-                }
-            }
-        }
+        this.octTree = new OctTree(bounds, maxEntriesPerOctant);
 
         // Cube bounds = new Cube(mins, maxs);
-
-    }
-
-    public ArrayList<String[]> csvReader(String fileName, String strTableName) {
-        String csvFile = fileName;
-        String line = "";
-        String csvSeparator = ",";
-        ArrayList<String[]> result = new ArrayList<String[]>();
-        try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
-            br.readLine();
-            while ((line = br.readLine()) != null) {
-                String[] values = line.split(csvSeparator);
-                if (values[0].equals(strTableName)) {
-                    result.add(values);
-                }
-
-            }
-            return result;
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
 
     }
 

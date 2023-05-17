@@ -87,7 +87,7 @@ public class Main {
 
         // engine
 
-        //engine.createTable("Student", "id", htblColNameType, mins, maxs);
+       // engine.createTable("Student", "id", htblColNameType, mins, maxs);
 //        engine.insertIntoTable("Student", t1);
 //        engine.insertIntoTable("Student", t2);
 //        engine.insertIntoTable("Student", t3);
@@ -99,28 +99,28 @@ public class Main {
 
 
 
-         SQLTerm query = new SQLTerm("Student", "name","=","Sesdfaf");
-         SQLTerm query2 = new SQLTerm("Student", "gpa","=",3.0);
-         SQLTerm query3 = new SQLTerm("Student", "name","=","Seaf");
-
-         SQLTerm[] sqlTerms = {query, query2};
-         String [] x = {"OR"};
-         Iterator res = new ResultSet();
-         res = engine.selectFromTable(sqlTerms, x);
-         while(res.hasNext()) {
-				System.out.print("< ");
-
-        	 Tuple temp = (Tuple) res.next();
-				Enumeration<String> e = temp.data.keys();
-        	 while (e.hasMoreElements()) {
-					String key = e.nextElement();
-					System.out.print(key + ": " + temp.data.get(key));
-					if (e.hasMoreElements())
-						System.out.print(" , ");
-				}
-				System.out.print(" > \n");
-
-         }
+//         SQLTerm query = new SQLTerm("Student", "name","=","Sesdfaf");
+//         SQLTerm query2 = new SQLTerm("Student", "gpa","=",3.0);
+//         SQLTerm query3 = new SQLTerm("Student", "name","=","Seaf");
+//
+//         SQLTerm[] sqlTerms = {query, query2};
+//         String [] x = {"OR"};
+//         Iterator res = new ResultSet();
+//         //res = engine.selectFromTable(sqlTerms, x);
+//         while(res.hasNext()) {
+//				System.out.print("< ");
+//
+//        	 Tuple temp = (Tuple) res.next();
+//				Enumeration<String> e = temp.data.keys();
+//        	 while (e.hasMoreElements()) {
+//					String key = e.nextElement();
+//					System.out.print(key + ": " + temp.data.get(key));
+//					if (e.hasMoreElements())
+//						System.out.print(" , ");
+//				}
+//				System.out.print(" > \n");
+//
+//         }
         // engine.insertIntoTable("Student", t4);
         // engine.insertIntoTable("Student", t5);
         // engine.insertIntoTable("Student", t6);
@@ -131,7 +131,7 @@ public class Main {
 
         // engine.updateTable("Student", "2", u3);
 
-       //engine.clear();
+       engine.clear();
 
         // print page content
         System.out.println("\nin main");

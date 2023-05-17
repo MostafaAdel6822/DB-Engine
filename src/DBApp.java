@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -11,13 +12,17 @@ import java.io.ObjectOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Properties;
+import java.util.Set;
 
 public class DBApp {
 	int MaximumRowsCountinTablePage;
@@ -76,7 +81,7 @@ public class DBApp {
 
 	}
 
-	public boolean tableExists(String strTableName) throws ClassNotFoundException, IOException {
+	private boolean tableExists(String strTableName) throws ClassNotFoundException, IOException {
 		try {
 			readObject(strTableName + "Info" + ".class");
 			return true;
@@ -85,7 +90,7 @@ public class DBApp {
 		}
 	}
 
-	// CREATING INDEX
+	
 
 	// INSERTING
 	public void insertIntoTable(String strTableName, Hashtable<String, Object> htblColNameValue) throws Exception {
@@ -140,6 +145,33 @@ public class DBApp {
 			System.out.println("ba3d create new page");
 
 		}
+
+		pageName = tableInfo.tablePages.get(pagePointer);
+
+		String fullPageName = "resources/data/" + strTableName + "/" + pageName + ".class";
+
+		// add reference to index
+		File indicesFolder = new File("resources/indices");
+		for (File file : indicesFolder.listFiles()) {
+			OctTreeIndex currentOCI = (OctTreeIndex) readObject("resources/indices/" + file.getName());
+			if (currentOCI.tableName == strTableName) {
+				String[] strarrColName = currentOCI.columnsNames;
+				for (int j = 0; j < currentOCI.columnsNames.length; j++) {
+
+					Hashtable<String, Object> refData = new Hashtable<String, Object>();
+
+					refData.put(strarrColName[2], htblColNameValue.get(strarrColName[2]));
+					refData.put(strarrColName[1], htblColNameValue.get(strarrColName[1]));
+					refData.put(strarrColName[0], htblColNameValue.get(strarrColName[0]));
+
+					TupleReference reference = new TupleReference(refData, fullPageName);
+
+					currentOCI.octTree.insertTupleReference(reference);
+				}
+			}
+			writeObject("resources/indices/" + file.getName(), currentOCI);
+		}
+
 		printPagesContent(tableInfo);
 	}
 
@@ -346,13 +378,44 @@ public class DBApp {
 
 		// method for matching the right tuple with the strClusteringKeyValue and
 		// replacing its data
+
 		for (int i = 0; i < page.tuples.size(); i++) {
 			Tuple t = page.tuples.get(i);
 			System.out.println("clusterKeyValue: " + t.data.get(tableInfo.clusteringKeyName));
 			System.out.println("condition: " + t.data.get(tableInfo.clusteringKeyName).equals(strClusteringKeyValue));
 			if (t.data.get(tableInfo.clusteringKeyName).equals(Integer.parseInt(strClusteringKeyValue))) {
 				System.out.println("da5l if");
+				OctTreeIndex oci = null;
+
+				File indicesFolder = new File("resources/indices");
+				for (File file : indicesFolder.listFiles()) {
+					OctTreeIndex currentOCI = (OctTreeIndex) readObject("resources/indices/" + file.getName());
+					if (currentOCI.tableName == strTableName)
+						oci = currentOCI;
+
+					writeObject("resources/indices/" + file.getName(), currentOCI);
+				}
+
+				String[] strarrColName = oci.columnsNames;
+				Object minC1 = t.data.get(strarrColName[0]);
+				Object minC2 = t.data.get(strarrColName[1]);
+				Object minC3 = t.data.get(strarrColName[2]);
+				Object maxC1 = t.data.get(strarrColName[0]);
+				Object maxC2 = t.data.get(strarrColName[1]);
+				Object maxC3 = t.data.get(strarrColName[2]);
+
+				Cube point = new Cube(minC1, maxC1, minC2, maxC2, minC3, maxC3);
+
+				// update actual tuple
 				updateTuple(t, htblColNameValue);
+
+				Object c1 = t.data.get(strarrColName[0]);
+				Object c2 = t.data.get(strarrColName[1]);
+				Object c3 = t.data.get(strarrColName[2]);
+
+				Object[] newVals = { c1, c2, c3 };
+				oci.octTree.updateTupleReference(point, newVals);
+
 			}
 		}
 
@@ -480,7 +543,7 @@ public class DBApp {
 	}
 
 	private void deleteTuples(String strTableName, TableInfo tableInfo, Hashtable<String, Object> htblColNameValue)
-			throws ClassNotFoundException, IOException {
+			throws ClassNotFoundException, IOException, DBAppException {
 		for (int i = 0; i < tableInfo.tablePages.size(); i++) {
 			Page page = (Page) readObject(
 					"resources/data/" + tableInfo.tableName + "/" + tableInfo.tablePages.get(i) + ".class");
@@ -491,6 +554,33 @@ public class DBApp {
 				if (checkTupleValues(tuple, htblColNameValue)) {
 					// tuplesToDelete++;
 					System.out.print("tuple=> " + tableInfo.clusteringKeyName + ": " + clusteringKeyValue + "\n");
+
+					// remove tuple reference from index
+					OctTreeIndex oci = null;
+
+					File indicesFolder = new File("resources/indices");
+					for (File file : indicesFolder.listFiles()) {
+						OctTreeIndex currentOCI = (OctTreeIndex) readObject("resources/indices/" + file.getName());
+						if (currentOCI.tableName == strTableName)
+							oci = currentOCI;
+
+						writeObject("resources/indices/" + file.getName(), currentOCI);
+					}
+
+					String[] strarrColName = oci.columnsNames;
+
+					Object minC1 = tuple.data.get(strarrColName[0]);
+					Object minC2 = tuple.data.get(strarrColName[1]);
+					Object minC3 = tuple.data.get(strarrColName[2]);
+					Object maxC1 = tuple.data.get(strarrColName[0]);
+					Object maxC2 = tuple.data.get(strarrColName[1]);
+					Object maxC3 = tuple.data.get(strarrColName[2]);
+
+					Cube point = new Cube(minC1, maxC1, minC2, maxC2, minC3, maxC3);
+
+					oci.octTree.deleteTupleReference(point);
+
+					// delete actual tuple
 					page.tuples.remove(tuple);
 					tableInfo.clusteringKeyData.remove(clusteringKeyValue);
 					j--;
@@ -572,7 +662,7 @@ public class DBApp {
 
 	private void deleteEmptyPages(String strTableName, TableInfo tableInfo) throws ClassNotFoundException, IOException {
 		ArrayList<String> tablePages = tableInfo.tablePages;
-		
+
 		for (int i = 0; i < tablePages.size(); i++) {
 			Page page = (Page) readObject("resources/data/" + tableInfo.tableName + "/" + tablePages.get(i) + ".class");
 			if (page.tuples.isEmpty()) {
@@ -590,13 +680,89 @@ public class DBApp {
 
 	}
 	
-	public void createIndex(String strTableName, String[] strarrColName) throws DBAppException, IOException, ClassNotFoundException {
+	public void createIndex(String strTableName, String[] strarrColName)
+			throws DBAppException, ClassNotFoundException, IOException {
+		// check that the 3 columns exist in table from csv file
 		if (!tableExists(strTableName))
 			throw new DBAppException("Table does not exist");
-		//change target columns in metadata.csv
-		//et2aked mel tarteeb el sah
-		OctTreeIndex t = new OctTreeIndex(strTableName,"curretnIndex", strarrColName);
-	
+		validateCreateIndex(strTableName, strarrColName);
+
+        
+		// if (strarrColName.length != 3)
+		// throw new DBAppException("3 columns ");
+
+		// validate that the 3 columns exist in the metadata and belong to the same
+		// table
+
+		// modify their lines in the csv to include the name of the index
+
+		// store their names types mins and maxs
+
+		ArrayList<String[]> tableData = csvReader("resources/metadata.csv", strTableName);
+		String newIndexName="";
+        for(int i=0;i<strarrColName.length;i++)
+        {
+            newIndexName = newIndexName + strarrColName[i] + "";
+        }
+
+        for(int i=0;i<strarrColName.length;i++)
+        {
+            for(int j=0; j<tableData.size();j++)
+            {
+                if(tableData.get(i)[0].equals(strTableName))
+                {
+
+                    if(tableData.get(i)[1].equals(strarrColName[j]))
+                        //updateInCsv(strTableName,strarrColName[j],newIndexName); //TODO 
+                        //updateTypeCsv(strTableName,strarrColName[j]);
+                        break;
+                }
+            }
+        }
+		Hashtable<String, Object> mins = new Hashtable<String, Object>();
+		Hashtable<String, Object> maxs = new Hashtable<String, Object>();
+		
+		Object min=null;
+        Object max=null;
+
+        for (int i = 0; i < tableData.size(); i++) {
+            for (int j = 0; j < strarrColName.length; j++) {
+                if (tableData.get(i)[1].equals(strarrColName[j])) {
+                    if (tableData.get(i)[2].equals("java.lang.Integer")) {
+                        min = Integer.parseInt(tableData.get(i)[6]);
+                        max = Integer.parseInt(tableData.get(i)[7]);
+                    } else if (tableData.get(i)[2].equals("java.lang.Double")) {
+                        min = Double.parseDouble(tableData.get(i)[6]);
+                         max = Double.parseDouble(tableData.get(i)[7]);
+        
+                    } else if (tableData.get(i)[2].equals("java.util.Date")) {
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("YYYY-MM-DD");
+                        try {
+                           min = dateFormat.parse(tableData.get(i)[6]);
+                            max = dateFormat.parse(tableData.get(i)[7]);
+                          
+                        } catch (ParseException e) {
+                            e.printStackTrace();
+                        }
+                    }else {
+                        min=tableData.get(i)[6];
+                        max=tableData.get(i)[7];
+                    }
+
+                    mins.put(strarrColName[j], min);
+                    maxs.put(strarrColName[j], max);
+                }
+            }
+        }
+		Cube bounds = new Cube(mins.get(strarrColName[0]), maxs.get(strarrColName[0]), mins.get(strarrColName[1]),
+				maxs.get(strarrColName[1]), mins.get(strarrColName[2]), maxs.get(strarrColName[2]));
+
+		String indexName = strarrColName[0] + "_" + strarrColName[1] + "_" + strarrColName[2] + "_Index";
+		OctTreeIndex index = new OctTreeIndex(strTableName, indexName, strarrColName, bounds);
+
+		// we can validate that the index does not exist
+		writeObject("resources/indices/" + indexName + ".class", index);
+		// create OctTreeIndex
 	}
 
 	// SELECTING
@@ -605,39 +771,58 @@ public class DBApp {
 		ResultSet tempResultSet = new ResultSet();
 		ResultSet orResultSet = new ResultSet();
 		ResultSet allResultSet = new ResultSet();
+		String[] colNames = new String[arrSQLTerms.length];
+		OctTreeIndex index = new OctTreeIndex(); 
+		int r =0;
+		//SQLTerm indexSQL = new SQLTerm();
 		boolean useIndex = false;
 		
 		allResultSet = createAllResultSet(arrSQLTerms[0]._strTableName);
 		ArrayList<String[]> tableData = csvReader("metadata.csv", arrSQLTerms[0]._strTableName);
 		//CHECK IF 3 COLUMNS ARE OF SAME INDEX
-		for(int i=0;i<arrSQLTerms.length;i++){
-			for(int j = 0; j<tableData.size(); j++) {
-				if(arrSQLTerms[i]._strColumnName.equals(tableData.get(j)[1])){
-					if(tableData.get(j)[4]!=null){
-						//selectFromIndex();
-						useIndex = true;
-					}
-					else {
-						//selectLinearWithIndex(arrSQLTerms[i]._strTableName, arrSQLTerms[i]._strColumnName, arrSQLTerms[i]._objValue);
-					}
-				}
+		//check to use index
+		//if use index: 
+		for(int i = 0; i<arrSQLTerms.length; i++) {
+			colNames[i]=arrSQLTerms[i]._strColumnName;
+		}
+		//String[] array = colNames.toArray(new String[0]);
+		
+		
+		File indicesFolder = new File("resources/indices");
+        for (File file : indicesFolder.listFiles()) {
+        	OctTreeIndex current = (OctTreeIndex) readObject("resources/indices/"+file.getName()); 
+        	if(current.tableName==arrSQLTerms[0]._strTableName) {
+        		if(isSubset(colNames, current.columnsNames)){
+					useIndex=true;
+					index=current;						
+        		}
+        		
+
+
 			}
-			
-		}
-		if(useIndex) {
-			//selecctUsingIndex();
-			//desrialize index in an octTreeIndex object
-			//get octTree from octTree
-			//octTree.findTupleRefernce();
-			//
-		}
+        }
+        ArrayList<SQLTerm> indexQueriesList = new ArrayList<SQLTerm>();
+        for(int i=0; i<arrSQLTerms.length; i++) {
+        	for(int j = 0; j<colNames.length; j++) {
+        		if(arrSQLTerms[i]._strColumnName.equals(colNames[j])) {
+        			indexQueriesList.add(arrSQLTerms[i]);
+        		}        		
+        	}
+        }
+        SQLTerm[] indexQueries =new SQLTerm[3];
+        indexQueries[0]=indexQueriesList.get(0);
+        indexQueries[2]=indexQueriesList.get(1);
+        indexQueries[2]=indexQueriesList.get(2);
+
+
+		
 		if(!useIndex) {
 			//instead of for loop, check the strarrOperators (or, and) to know which result set to continue on
 			tempResultSet = selectLinear(arrSQLTerms[0], arrSQLTerms[0]._strTableName);
 			
 
 			if(strarrOperators.length!=0) {
-				for(int i = 0; i<strarrOperators.length; i++) {
+				for(int i = r; i<strarrOperators.length; i++) {
 					if(strarrOperators[i].equals("AND")) {
 						tempResultSet = selectFromResultSet(tempResultSet, arrSQLTerms[i+1]);	
 						
@@ -678,6 +863,106 @@ public class DBApp {
 		}
 		return tempResultSet;
 	}
+	public ResultSet selectFromPage(Page page, SQLTerm query, ResultSet tempResultSet) {
+		String columnName = query._strColumnName;
+		String operator = query._strOperator;
+		Object objValue = query._objValue;
+		ResultSet resultSet = new ResultSet();
+		for (int j = 0; j < page.tuples.size(); j++) {
+			Tuple currentTuple = page.tuples.get(j);
+			Enumeration<String> e = currentTuple.data.keys();
+			while (e.hasMoreElements()) {
+				String key = e.nextElement();
+				if(key.equals(columnName)) {
+					if(operator.equals("="))
+					{
+						if(equal(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);
+					}
+					if(operator.equals("!="))
+					{
+						if(notEqual(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);
+						
+					}
+					if(operator.equals("<"))
+					{
+						if(lessThan(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);
+					}
+					if(operator.equals("<="))
+					{
+						if(lessThanOrEqual(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);	
+					}
+					if(operator.equals(">"))
+					{
+						if(greaterThan(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);	
+					}	
+					if(operator.equals(">="))
+					{
+						if(greaterThanOrEqual(currentTuple.data.get(key), objValue))
+							resultSet.tuples.add(currentTuple);	
+					}
+					
+				}
+			
+			}
+
+		}
+		return resultSet;
+	}
+
+	public Object getObjectPlusOne(Object mid) {
+        if (mid instanceof Integer) {
+            int oldMid = (int) mid;
+            mid = oldMid + 1;
+        } else if (mid instanceof Double) {
+            mid = (Double) mid + 1.0;
+        } else if (mid instanceof String) {
+            String midLowerCase = ((String) mid).toLowerCase();
+            char[] chars = midLowerCase.toCharArray();
+            int n = chars.length;
+
+            if (chars[n - 1] != 'z') {
+                int temp = (int) chars[n - 1];
+                char tempChar = (char) ++temp;
+                chars[n - 1] = tempChar;
+            }
+
+            else if (chars[n - 1] == 'z') {
+                int i = n - 2;
+
+                while (chars[i] == 'z' && i > 0)
+                    i--;
+
+                int temp = (int) chars[i];
+                char tempChar = (char) ++temp;
+                chars[i] = tempChar;
+
+                for (int j = i + 1; j < n; j++)
+                    chars[j] = 'a';
+
+            }
+            mid = new String(chars);
+        } else if (mid instanceof Date) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime((Date) mid);
+            calendar.add(Calendar.DATE, 1);
+            mid = calendar.getTime();
+        }
+        return mid;
+    }
+	public static boolean isSubset(String[] mainArray, String[] arrayToCheck) {
+	    Set<String> set = new HashSet<>(Arrays.asList(mainArray));
+	    for (String str : arrayToCheck) {
+	        if (!set.contains(str)) {
+	            return false;
+	        }
+	    }
+	    return true;
+	}
 	
 	public String getOpposite(String operator) {
 		 if(operator.equals("=")) {
@@ -701,6 +986,39 @@ public class DBApp {
 		return "";
 	}
 
+	
+
+	
+
+	public void validateCreateIndex(String strTableName, String[] strarrColName) throws DBAppException{
+		ArrayList<String[]> tableData = csvReader("resources/metadata.csv", strTableName);
+
+
+		
+		for(int j = 0;j<strarrColName.length;j++){
+			boolean flag = false;
+			for(int i =0 ;i<tableData.size();i++)
+			{
+				if(tableData.get(i)[0].equals(strTableName))
+				{
+			
+					if(tableData.get(i)[1].equals(strarrColName[j]))
+						flag=true;	
+						
+						break;
+				}
+
+			}
+
+			if(flag=false)
+			{
+				throw new DBAppException("colName does not exist");
+			}
+		
+
+
+		}	
+	}
 
 	 public static ResultSet getSetDifference(ResultSet allResultSet, ResultSet tempResultSet) {
 			ResultSet res = new ResultSet();

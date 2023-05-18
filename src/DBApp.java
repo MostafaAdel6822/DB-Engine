@@ -713,7 +713,7 @@ public class DBApp {
                 {
 
                     if(tableData.get(i)[1].equals(strarrColName[j]))
-                        //updateInCsv(strTableName,strarrColName[j],newIndexName); //TODO 
+                        updateInCsv(strTableName,strarrColName[j],newIndexName); //TODO 
                         //updateTypeCsv(strTableName,strarrColName[j]);
                         break;
                 }
@@ -912,6 +912,41 @@ public class DBApp {
 
 		}
 		return resultSet;
+	}
+	public void updateInCsv(String strTableName, String strarrColName, String newIndexName) {
+		String fileName = "resources/metadata.csv";
+        
+        try {
+            File inputFile = new File(fileName);
+            File tempFile = new File("temp.txt");
+
+            BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+            BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length == 8 && parts[0].equals(strTableName) && parts[1].equals(strarrColName)) {
+                    parts[4] = newIndexName;
+                    parts[5] = "OctTree";
+                    line = String.join(",", parts);
+                }
+                writer.write(line + "\n");
+            }
+            reader.close();
+            writer.close();
+            
+            // delete the original file
+            inputFile.delete();
+            
+            // rename the temp file to the original file
+            tempFile.renameTo(inputFile);
+            
+            System.out.println("Index values updated successfully!");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 	}
 
 	public Object getObjectPlusOne(Object mid) {

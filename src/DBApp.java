@@ -814,7 +814,105 @@ public class DBApp {
         indexQueries[2]=indexQueriesList.get(1);
         indexQueries[2]=indexQueriesList.get(2);
 
-
+        if(useIndex) {
+			OctTree tree=index.octTree;
+			//selecctUsingIndex();
+			//desrialize index in an octTreeIndex object
+			//get octTree from octTree
+			Object minC1=null, minC2=null, minC3=null, maxC1=null, maxC2=null, maxC3=null;
+			//new sqlTerms must be ordered as ourcube(index)
+			for(int i = 0; i<indexQueries.length; i++) {
+				if(indexQueries[i]._strOperator.equals("=")) {
+					if(i==0) {
+						minC1 = indexQueries[i]._objValue;
+						maxC1 = indexQueries[i]._objValue;						
+					}
+					if(i==1) {
+						minC2 = indexQueries[i]._objValue;
+						maxC2 = indexQueries[i]._objValue;						
+					}
+					if(i==2) {
+						minC3 = indexQueries[i]._objValue;
+						maxC3 = indexQueries[i]._objValue;						
+					}
+				}
+				if(indexQueries[i]._strOperator.equals(">=")) {
+					if(i==0) {
+						minC1 = indexQueries[i]._objValue;
+						maxC1 = tree.bounds.maxC1;						
+					}
+					if(i==1) {
+						minC2 = indexQueries[i]._objValue;
+						maxC2 = tree.bounds.maxC2;							
+					}
+					if(i==2) {
+						minC3 = indexQueries[i]._objValue;
+						maxC3 = tree.bounds.maxC3;							
+					}
+					
+				}
+				if(indexQueries[i]._strOperator.equals(">")) {
+					if(i==0) {
+						minC1 = getObjectPlusOne(indexQueries[i]._objValue);
+						maxC1 = tree.bounds.maxC1;						
+					}
+					if(i==1) {
+						minC2 = getObjectPlusOne(indexQueries[i]._objValue);
+						maxC2 = tree.bounds.maxC2;							
+					}
+					if(i==2) {
+						minC3 = getObjectPlusOne(indexQueries[i]._objValue);
+						maxC3 = tree.bounds.maxC3;							
+					}
+					
+				}
+				if(indexQueries[i]._strOperator.equals("<=")) {
+					if(i==0) {
+						minC1 = tree.bounds.minC1;
+						maxC1 = indexQueries[i]._objValue;						
+					}
+					if(i==1) {
+						minC2 = tree.bounds.minC2;
+						maxC2 = indexQueries[i]._objValue;							
+					}
+					if(i==2) {
+						minC3 = tree.bounds.minC3;
+						maxC3 = indexQueries[i]._objValue;								
+					}
+					
+				}
+				if(indexQueries[i]._strOperator.equals("<")) {
+					if(i==0) {
+						minC1 = tree.bounds.minC1;
+						maxC1 = indexQueries[i]._objValue;						
+					}
+					if(i==1) {
+						minC2 = tree.bounds.minC2;
+						maxC2 = indexQueries[i]._objValue;							
+					}
+					if(i==2) {
+						minC3 = tree.bounds.minC3;
+						maxC3 = indexQueries[i]._objValue;								
+					}
+				}
+			}
+			
+			Cube range = new Cube(minC1,maxC1,minC2,maxC2,minC3,maxC3);
+			ArrayList<TupleReference> res = tree.findTupleReference(range, null);
+			
+			for(int i = 0; i<res.size(); i++) {
+				String pageName = res.get(i).pageReference;
+				Page p  = (Page) readObject(pageName);
+				for(int j = 0; j<p.tuples.size(); j++) {
+					for(int n = 0; n<indexQueries.length; n++) {
+						tempResultSet = selectFromPage(p, indexQueries[n], tempResultSet);						
+					}
+				}
+			}
+			useIndex=false;
+			r=2;
+			
+		}
 		
 		if(!useIndex) {
 			//instead of for loop, check the strarrOperators (or, and) to know which result set to continue on
